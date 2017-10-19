@@ -1,0 +1,20 @@
+## General
+
+# Compiled python
+*.pyc
+
+# IPython notebook checkpoints
+.ipynb_checkpoints
+
+# Editor temporaries
+*.swp
+*~
+
+# Log files
+log*.txt
+
+# pth.tar files
+*.pth.tar
+
+# zip files
+*.zip
