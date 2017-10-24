@@ -24,25 +24,37 @@ parser.add_argument('rootdir', metavar='DIR',
 parser.add_argument('--gpus', default='0,1,2,3,4,5,6,7', type=str, metavar='GPUs',
                     help='which GPU devices will be used (default: 0,1,2,3,4,5,6,7)')
 parser.add_argument('--train-list-file', '--tlf', default='./train_list.txt', type=str, metavar='PATH',
-                    help='path of train_list_file')
+                    help='path of train_list_file (default: ./train_list.txt)')
 parser.add_argument('--val-list-file', '--vlf', default='./val_list.txt', type=str, metavar='PATH',
-                    help='path of val_list_file')
-parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', choices=model_names,
-                    help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet18)')
-parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                    help='number of data loading workers (default: 4)')
-parser.add_argument('--epochs', default=90, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                    help='manual epoch number (useful on restarts)')
+                    help='path of val_list_file (default: ./val_list.txt)')
 parser.add_argument('--train-batch-size', '--tbs', default=256, type=int, metavar='N',
                     help='mini-train batch size (default: 256)')
 parser.add_argument('--val-batch-size', '--vbs', default=50, type=int, metavar='N',
                     help='mini-val batch size (default: 50)')
+parser.add_argument('--resize', default='256,256', type=str, metavar='M[,N]',
+                    help='input images need to be resized into M x M*L/S or M x N (default: 256,256)')
+parser.add_argument('--cropsize', default='224,244', type=str, metavar='H[,W]',
+                    help='crop_size is H x H or H x W (default: 224,224)')
+parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', choices=model_names,
+                    help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet18)')
+parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                    help='number of data loading workers (default: 4)')
+parser.add_argument('--optim-mode', default='SGD', type=str, metavar='TYPE',
+                    help='the type of optimizer (default: SGD)')
+parser.add_argument('--epochs', default=90, type=int, metavar='N',
+                    help='number of total epochs to run (default: 90)')
+parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
+                    help='manual epoch number (useful on restarts) (default: 0)')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float, metavar='LR',
-                    help='initial learning rate')
+                    help='initial learning rate (default: 0.1)')
+parser.add_argument('--lr-policy', default='step', type=str, metavar='TYPE',
+                    help='descend policy of learning rate (default: step)')
+parser.add_argument('--stepsize', default='20', type=str, metavar='N[,N2,N3]',
+                    help='the stepsize, only one-N is Step but multi-Ns is MultiStep (default: 20)')
+parser.add_argument('--gamma', default=0.1, type=float, metavar='GAMMA',
+                    help='descent coefficient of learning rate (default: 0.1)')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum')
+                    help='momentum (default: 0.9)')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float, metavar='WD',
                     help='weight decay (default: 1e-4)')
 parser.add_argument('--print-freq', '-p', default=100, type=int, metavar='N',
@@ -77,8 +89,9 @@ class FineTuneModel(nn.Module):
         elif arch.startswith('resnet'):
             # Everything except the last linear layer
             self.features = nn.Sequential(*list(original_model.children())[:-1]) #unknown
+            in_features = list(original_model.children())[-1].in_features
             self.classifier = nn.Sequential(
-                nn.Linear(512, num_classes)
+                nn.Linear(in_features, num_classes)
             )
             self.modelName = 'resnet'
         elif arch.startswith('vgg16'):
@@ -117,15 +130,15 @@ def main():
     global args, best_prec1
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
-    print("Using GPUs " + args.gpus)
+    print("Using GPUs {0}, PID = {1}".format(args.gpus, os.getpid()))
 
     # Data loading code
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
     train_lister = torchvision_datasets_lister.ImageLister(args.rootdir, args.train_list_file,
         transforms.Compose([
-            transforms.Scale([256, 256]),
-            transforms.RandomSizedCrop(224),
+            transforms.Scale(string2list(args.resize)),
+            transforms.RandomSizedCrop(string2list(args.cropsize)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
@@ -136,8 +149,8 @@ def main():
 
     val_lister = torchvision_datasets_lister.ImageLister(args.rootdir, args.val_list_file,
         transforms.Compose([
-            transforms.Scale([256, 256]),
-            transforms.CenterCrop(224),
+            transforms.Scale(string2list(args.resize)),
+            transforms.CenterCrop(string2list(args.cropsize)),
             transforms.ToTensor(),
             normalize,
         ])
@@ -146,7 +159,9 @@ def main():
         val_lister, batch_size=args.val_batch_size, shuffle=False, num_workers=args.workers, pin_memory=True)
 
     num_classes = train_lister.get_num_classes()
-    print("num_classes = '{}'".format(num_classes))
+    print("num_classes = {}".format(num_classes))
+    print("resize_image = {}, cropsize_image = {}".format(string2list(args.resize), string2list(args.cropsize)))
+    print("train_batch_size = {0}, val_batch_size = {1}".format(args.train_batch_size, args.val_batch_size))
     # create model
     if args.finetune:
         print("=> using pre-trained model '{}'".format(args.arch))
@@ -179,17 +194,32 @@ def main():
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
 
-    optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), # Only finetunable params
+    if args.optim_mode == 'SGD':
+        optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
                                 args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
+    elif args.optim_mode == 'RMSProp':
+        optimizer = torch.optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
+                                args.lr)
+    else:
+        optimizer = None
+    print("Solver_Type = '{0}', lr = {1}, momentum = {2}, weight_decay = {3}".format(
+            args.optim_mode, args.lr, args.momentum, args.weight_decay))
 
     if args.evaluate:
         validate(val_loader, model, criterion)
         return
 
     import torch.optim.lr_scheduler as lr_scheduler
-    scheduler = lr_scheduler.MultiStepLR(optimizer, [36, 41, 44], gamma=0.1)
+    if args.lr_policy == 'multistep':
+        scheduler = lr_scheduler.MultiStepLR(optimizer, string2list(args.stepsize), args.gamma)
+    elif args.lr_policy == 'step':
+        scheduler = lr_scheduler.StepLR(optimizer, string2list(args.stepsize), args.gamma)
+    else:
+        scheduler = None
+    print("lr_policy = '{0}', stepsize = {1}, gamma = {2}".format(args.lr_policy, args.stepsize, args.gamma))
+    print("start_epoch = {0}, total_epoch = {1}\n".format(args.start_epoch, args.epochs))
     for epoch in range(args.start_epoch, args.epochs):
         #adjust_learning_rate(optimizer, epoch)
         scheduler.step()
@@ -332,21 +362,6 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def adjust_learning_rate(optimizer, epoch):
-    """Sets the learning rate to the initial LR decayed by Milestones"""
-    lr = args.lr
-    if epoch >= 36:
-        lr *= 0.1
-    if epoch >= 41:
-        lr *= 0.1
-    if epoch >= 44:
-        lr *= 0.1
-    for group in optimizer.param_groups:
-        group['lr'] = lr
-    #for param_group in optimizer.state_dict()['param_groups']:
-    #    param_group['lr'] = lr
-
-
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
@@ -361,6 +376,14 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+
+def string2list(ori_str='20,40,60,80'):
+    list1 = [int(item) for item in ori_str.split(',')]
+    if len(list1) > 1:
+        return list1
+    else:
+        return list1[0]
 
 
 if __name__ == '__main__':
