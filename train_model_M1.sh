@@ -1,6 +1,6 @@
 #!/bin/sh
 
-python ./image_classification.py \
+python ./image_classification_VGG16_M1.py \
   --gpus $1 \
   ../CUB_200_2011/images \
   --tlf ../CUB_200_2011/train_list.txt \
@@ -9,16 +9,16 @@ python ./image_classification.py \
   --val-batch-size 2 \
   --resize 640,640 \
   --cropsize 448 \
-  --arch vgg16 \
+  --arch $2 \
   --workers 4 \
-  --optim-mode SGD
+  --optim-mode SGD \
   --epochs 120 \
   --start-epoch 0 \
   --lr 0.002 \
   --lr-policy step \
   --stepsize 3 \
   --gamma 0.92 \
-  --print-freq 111 \
+  --print-freq 37 \
   --momentum 0.9 \
   --weight-decay 1e-4 \
   --pretrained \

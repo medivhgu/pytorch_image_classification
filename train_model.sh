@@ -12,11 +12,11 @@ python ./image_classification.py \
   --arch vgg16 \
   --workers 4 \
   --optim-mode SGD \
-  --epochs 50 \
+  --epochs 58 \
   --start-epoch 0 \
   --lr 0.01 \
   --lr-policy multistep \
-  --stepsize 24,36,42,48 \
+  --stepsize 30,48 \
   --gamma 0.1 \
   --print-freq 54 \
   --momentum 0.9 \
