@@ -310,7 +310,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
     model.train()
 
     end = time.time()
-    print('Train:')
+    print('Train: ' + format_time() + '  ' + str(os.getpid()))
     for i, (input, target) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
@@ -360,7 +360,7 @@ def validate(val_loader, model, criterion):
     model.eval()
 
     end = time.time()
-    print('Val:')
+    print('Val:   ' + format_time() + '  ' + str(os.getpid()))
     for i, (input, target) in enumerate(val_loader):
         target = target.cuda(async=True)
         input_var = torch.autograd.Variable(input, volatile=True)
@@ -442,6 +442,12 @@ def string2list(ori_str='20,40,60,80'):
         return list1
     else:
         return list1[0]
+
+def format_time(date=-1):
+    if date == -1:
+        date=time.time()
+    time_formatted = time.strftime("%Y-%m-%d %H:%M:", time.localtime(date))
+    return "{0}{1:.6f}".format(time_formatted, date % 60)
 
 
 if __name__ == '__main__':
