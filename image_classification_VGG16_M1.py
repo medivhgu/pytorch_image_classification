@@ -98,15 +98,20 @@ class FineTuneModel(nn.Module):
             self.modelName = 'resnet'
         elif arch.startswith('vgg16'):
             self.features = original_model.features
-            self.classifier = nn.Sequential(
-                nn.Linear(512 * 7 * 7, 4096),
-                nn.ReLU(inplace=True),
-                nn.Dropout(),
-                nn.Linear(4096, 4096),
-                nn.ReLU(inplace=True),
-                nn.Dropout(),
+            self.classifier = nn.Sequential(*list(original_model.classifier)[:-1])
+            self.classifier_fc8 = nn.Sequential(
                 nn.Linear(4096, num_classes),
             )
+            #self.classifier = nn.Sequential(
+            #    nn.Linear(512 * 7 * 7, 4096),
+            #    nn.ReLU(inplace=True),
+            #    nn.Dropout(),
+            #    nn.Linear(4096, 4096),
+            #    nn.ReLU(inplace=True),
+            #    nn.Dropout(),
+            #    nn.Linear(4096, num_classes),
+            #)
+            #self.initialize_weights_local(self.classifier_fc8)
             self.modelName = 'vgg16'
         elif arch == 'VGG16_M':
             self.features = nn.Sequential(*list(original_model.features)[:-1])
@@ -141,8 +146,9 @@ class FineTuneModel(nn.Module):
         else:
             raise("Finetuning not supported on this architecture yet")
 
-        for p in self.features.parameters():
-            p.requires_grad = True
+        ## Freeze those weights 
+        #for p in self.features.parameters():
+        #    p.requires_grad = false
 
 
     def forward(self, x):
@@ -164,6 +170,8 @@ class FineTuneModel(nn.Module):
         elif self.modelName == 'resnet':
             f = f.view(f.size(0), -1)
         y = self.classifier(f)
+        if self.modelName == 'vgg16':
+            y = self.classifier_fc8(y)
         return y
 
     def initialize_weights_local(self, block):
@@ -193,7 +201,7 @@ def main():
     train_lister = torchvision_datasets_lister.ImageLister(args.rootdir, args.train_list_file,
         transforms.Compose([
             transforms.Scale(string2list(args.resize)),
-            transforms.RandomSizedCrop(string2list(args.cropsize)),
+            transforms.RandomCrop(string2list(args.cropsize)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
@@ -346,7 +354,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
                   'Loss {loss.val:.4f}({loss.avg:.4f})\t'
                   'Prec@1 {top1.val:.3f}({top1.avg:.3f})\t'
                   'Prec@5 {top5.val:.3f}({top5.avg:.3f})'.format(
-                      epoch, i, len(train_loader), optimizer.state_dict()['param_groups'][0]['lr'],
+                      epoch, i, len(train_loader), round(optimizer.state_dict()['param_groups'][0]['lr'], 8),
                       batch_time=batch_time, data_time=data_time, loss=losses, top1=top1, top5=top5))
 
 
@@ -442,6 +450,7 @@ def string2list(ori_str='20,40,60,80'):
         return list1
     else:
         return list1[0]
+
 
 def format_time(date=-1):
     if date == -1:
