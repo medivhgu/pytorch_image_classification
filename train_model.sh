@@ -12,17 +12,20 @@ python ./image_classification_VGG16_M1.py \
   --arch vgg16 \
   --workers 4 \
   --optim-mode SGD \
-  --epochs 18 \
+  --epochs 40 \
   --start-epoch 0 \
   --lr 0.01 \
   --lr-policy multistep \
-  --stepsize 8,13,17 \
+  --stepsize 22,38 \
   --gamma 0.1 \
   --print-freq 54 \
   --momentum 0.9 \
   --weight-decay 1e-4 \
   --pretrained \
   --finetune \
+  --snapshot-prefix vgg16_0-22-38-40_lr0.01_bs111 \
+  #--resume ./model_best.pth.tar \
+  #--evaluate
 
 
 #--resume PATH

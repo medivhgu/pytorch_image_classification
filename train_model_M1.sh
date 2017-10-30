@@ -12,17 +12,20 @@ python ./image_classification_VGG16_M1.py \
   --arch $2 \
   --workers 8 \
   --optim-mode SGD \
-  --epochs 120 \
+  --epochs 28 \
   --start-epoch 0 \
   --lr 0.01 \
-  --lr-policy step \
-  --stepsize 2 \
-  --gamma 0.92 \
+  --lr-policy multistep \
+  --stepsize 12,20,26 \
+  --gamma 0.1 \
   --print-freq 37 \
   --momentum 0.9 \
   --weight-decay 1e-4 \
   --pretrained \
-  --finetune
+  --finetune \
+  --snapshot-prefix test_CUB2011 \
+  #--resume ./model_best.pth.tar \
+  #--evaluate
 
 
 #--resume PATH

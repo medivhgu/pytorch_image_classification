@@ -61,6 +61,8 @@ parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float, metavar=
                     help='weight decay (default: 1e-4)')
 parser.add_argument('--print-freq', '-p', default=100, type=int, metavar='N',
                     help='print frequency (default: 100)')
+parser.add_argument('--snapshot-prefix', default='', type=str, metavar='N',
+                    help='prefix of checkpoint files (default: None)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -201,7 +203,8 @@ def main():
     train_lister = torchvision_datasets_lister.ImageLister(args.rootdir, args.train_list_file,
         transforms.Compose([
             transforms.Scale(string2list(args.resize)),
-            transforms.RandomCrop(string2list(args.cropsize)),
+            #transforms.RandomCrop(string2list(args.cropsize)),
+            transforms.RandomSizedCrop(string2list(args.cropsize)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
@@ -251,7 +254,8 @@ def main():
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
-            print("=> loaded checkpoint '{}' (epoch {})".format(args.evaluate, checkpoint['epoch']))
+            print("=> loaded checkpoint '{}' (epoch {}, Prec@1 {:.3f})".format(
+                  args.resume, checkpoint['epoch'], best_prec1))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
@@ -304,7 +308,7 @@ def main():
             'arch': args.arch,
             'state_dict': model.state_dict(),
             'best_prec1': best_prec1,
-        }, is_best)
+        }, is_best, args.snapshot_prefix)
 
 
 def train(train_loader, model, criterion, optimizer, epoch):
@@ -404,10 +408,11 @@ def validate(val_loader, model, criterion):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, snapshot_prefix, filename='checkpoint.pth.tar'):
+    filename = snapshot_prefix + '_' + filename
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(filename, snapshot_prefix + '_model_best.pth.tar')
 
 
 class AverageMeter(object):
@@ -456,7 +461,7 @@ def format_time(date=-1):
     if date == -1:
         date=time.time()
     time_formatted = time.strftime("%Y-%m-%d %H:%M:", time.localtime(date))
-    return "{0}{1:.6f}".format(time_formatted, date % 60)
+    return "{0}{1:0>9.6f}".format(time_formatted, date % 60)
 
 
 if __name__ == '__main__':
