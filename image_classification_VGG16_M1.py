@@ -290,9 +290,11 @@ def main():
         scheduler = None
     print("lr_policy = '{0}', stepsize = {1}, gamma = {2}".format(args.lr_policy, args.stepsize, args.gamma))
     print("start_epoch = {0}, total_epoch = {1}\n".format(args.start_epoch, args.epochs))
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(0, args.epochs):
         #adjust_learning_rate(optimizer, epoch)
         scheduler.step()
+        if epoch < args.start_epoch:
+            continue
 
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch)
@@ -309,6 +311,7 @@ def main():
             'state_dict': model.state_dict(),
             'best_prec1': best_prec1,
         }, is_best, args.snapshot_prefix)
+    print("Best_Prec@1: {:.3f}".format(best_prec1))
 
 
 def train(train_loader, model, criterion, optimizer, epoch):
@@ -435,6 +438,8 @@ class AverageMeter(object):
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
+    if len(output[0]) < topk[1]:
+        topk = (1, len(output[0]))
     maxk = max(topk)
     batch_size = target.size(0)
 
