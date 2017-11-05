@@ -5,6 +5,7 @@ import time
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
@@ -98,6 +99,14 @@ class FineTuneModel(nn.Module):
                 nn.Linear(in_features, num_classes)
             )
             self.modelName = 'resnet'
+        elif arch.startswith('densenet'):
+            # Everything except the last linear layer
+            self.features = nn.Sequential(*list(original_model.children())[:-1])
+            in_features = list(original_model.children())[-1].in_features
+            self.classifier = nn.Sequential(
+                nn.Linear(in_features, num_classes)
+            )
+            self.modelName = 'densenet'
         elif arch.startswith('vgg16'):
             self.features = original_model.features
             self.classifier = nn.Sequential(*list(original_model.classifier)[:-1])
@@ -132,12 +141,13 @@ class FineTuneModel(nn.Module):
             #self.initialize_weights_local(self.classifier)
         elif arch == 'VGG16_M1':
             self.features = nn.Sequential(*list(original_model.features)[:-1])
+            dim = 28
             self.left_pool = nn.Sequential(
-                nn.AvgPool2d(kernel_size=28, stride=28),
+                nn.AvgPool2d(kernel_size=dim, stride=dim),
                 nn.BatchNorm2d(512),
             )
             self.right_pool = nn.Sequential(
-                nn.MaxPool2d(kernel_size=28, stride=28),
+                nn.MaxPool2d(kernel_size=dim, stride=dim),
                 nn.BatchNorm2d(512),
             )
             self.classifier = nn.Linear(1024, num_classes)
@@ -171,6 +181,9 @@ class FineTuneModel(nn.Module):
             f = f.view(f.size(0), -1)
         elif self.modelName == 'resnet':
             f = f.view(f.size(0), -1)
+        elif self.modelName == 'densenet':
+            out = F.relu(f, inplace=True)
+            f = F.avg_pool2d(out, kernel_size=7, stride=1).view(f.size(0), -1)
         y = self.classifier(f)
         if self.modelName == 'vgg16':
             y = self.classifier_fc8(y)
@@ -238,7 +251,10 @@ def main():
         model = FineTuneModel(original_model, args.arch, num_classes)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model = models.__dict__[args.arch]()
+        if args.pretrained:
+            model = models.__dict__[args.arch](pretrained=True)
+        else:
+            model = models.__dict__[args.arch](num_classes=num_classes)
 
     if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
         model.features = torch.nn.DataParallel(model.features)
