@@ -20,7 +20,6 @@ model_names = sorted(name for name in models.__dict__ if name.islower() and not 
 model_names = model_names + ['VGG16_M', 'VGG16_M0', 'VGG16_M1']
 
 
-
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('rootdir', metavar='DIR',
                     help='path to dataset')
@@ -74,6 +73,7 @@ parser.add_argument('--finetune', dest='finetune', action='store_true',
                     help='fine tune pre-trained model')
 
 best_prec1 = 0
+best_epoch = -1
 
 class FineTuneModel(nn.Module):
     def __init__(self, original_model, arch, num_classes):
@@ -189,6 +189,7 @@ class FineTuneModel(nn.Module):
             y = self.classifier_fc8(y)
         return y
 
+
     def initialize_weights_local(self, block):
         for m in block.modules():
             if isinstance(m, nn.Conv2d):
@@ -203,6 +204,7 @@ class FineTuneModel(nn.Module):
                 n = m.weight.size(1)
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+
 
 def main():
     global args, best_prec1
@@ -241,6 +243,7 @@ def main():
     print("num_classes = {}".format(num_classes))
     print("resize_image = {}, cropsize_image = {}".format(string2list(args.resize), string2list(args.cropsize)))
     print("train_batch_size = {0}, val_batch_size = {1}".format(args.train_batch_size, args.val_batch_size))
+
     # create model
     if args.finetune:
         print("=> using pre-trained model '{}'".format(args.arch))
@@ -262,12 +265,13 @@ def main():
     else:
         model = torch.nn.DataParallel(model).cuda()
 
-    # optionally resume from a checkpoint
+    # optionally resume from a checkpoint for new initial weights or resume previous training
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
             checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
+            if args.start_epoch == -1:
+                args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
             print("=> loaded checkpoint '{}' (epoch {}, Prec@1 {:.3f})".format(
@@ -290,6 +294,7 @@ def main():
                                 args.lr)
     else:
         optimizer = None
+        return
     print("Solver_Type = '{0}', lr = {1}, momentum = {2}, weight_decay = {3}".format(
             args.optim_mode, args.lr, args.momentum, args.weight_decay))
 
@@ -304,8 +309,10 @@ def main():
         scheduler = lr_scheduler.StepLR(optimizer, string2list(args.stepsize), args.gamma)
     else:
         scheduler = None
+        return
     print("lr_policy = '{0}', stepsize = {1}, gamma = {2}".format(args.lr_policy, args.stepsize, args.gamma))
     print("start_epoch = {0}, total_epoch = {1}\n".format(args.start_epoch, args.epochs))
+    
     for epoch in range(0, args.epochs):
         #adjust_learning_rate(optimizer, epoch)
         scheduler.step()
@@ -321,13 +328,15 @@ def main():
         # remember best prec@1 and save checkpoint
         is_best = prec1 > best_prec1
         best_prec1 = max(prec1, best_prec1)
+        if is_best:
+            best_epoch = epoch
         save_checkpoint({
             'epoch': epoch + 1,
             'arch': args.arch,
             'state_dict': model.state_dict(),
             'best_prec1': best_prec1,
         }, is_best, args.snapshot_prefix)
-    print("Best_Prec@1: {:.3f}".format(best_prec1))
+    print("Best_Prec@1: {:.3f} (at {} epoch)".format(best_prec1, best_epoch))
 
 
 def train(train_loader, model, criterion, optimizer, epoch):
