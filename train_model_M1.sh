@@ -7,23 +7,23 @@ python ./image_classification_VGG16_M1.py \
   --vlf ../CUB_200_2011/test_list.txt \
   --train-batch-size 54 \
   --val-batch-size 36 \
-  --resize 640,640 \
+  --resize 512,512 \
   --cropsize 448 \
   --arch $2 \
   --workers 8 \
   --optim-mode SGD \
-  --epochs 28 \
+  --epochs 120 \
   --start-epoch 0 \
   --lr 0.01 \
-  --lr-policy multistep \
-  --stepsize 12,20,26 \
-  --gamma 0.1 \
+  --lr-policy step \
+  --stepsize $3 \
+  --gamma 0.92 \
   --print-freq 37 \
   --momentum 0.9 \
   --weight-decay 1e-4 \
   --pretrained \
   --finetune \
-  --snapshot-prefix test_CUB2011 \
+  --snapshot-prefix CUB200_$2_step$3 \
   #--resume ./model_best.pth.tar \
   #--evaluate
 

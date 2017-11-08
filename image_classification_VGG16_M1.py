@@ -272,7 +272,7 @@ def main():
             checkpoint = torch.load(args.resume)
             if args.start_epoch == -1:
                 args.start_epoch = checkpoint['epoch']
-            best_prec1 = checkpoint['best_prec1']
+            best_prec1 = checkpoint['prec1']
             model.load_state_dict(checkpoint['state_dict'])
             print("=> loaded checkpoint '{}' (epoch {}, Prec@1 {:.3f})".format(
                   args.resume, checkpoint['epoch'], best_prec1))
@@ -334,7 +334,7 @@ def main():
             'epoch': epoch + 1,
             'arch': args.arch,
             'state_dict': model.state_dict(),
-            'best_prec1': best_prec1,
+            'prec1': prec1,
         }, is_best, args.snapshot_prefix)
     print("Best_Prec@1: {:.3f} (at {} epoch)".format(best_prec1, best_epoch))
 
