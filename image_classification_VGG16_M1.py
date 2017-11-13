@@ -207,7 +207,7 @@ class FineTuneModel(nn.Module):
 
 
 def main():
-    global args, best_prec1
+    global args, best_prec1, best_epoch
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
     print("Using GPUs {0}, PID = {1}".format(args.gpus, os.getpid()))
@@ -266,16 +266,29 @@ def main():
         model = torch.nn.DataParallel(model).cuda()
 
     # optionally resume from a checkpoint for new initial weights or resume previous training
+    prec1 = 0;
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
             checkpoint = torch.load(args.resume)
             if args.start_epoch == -1:
-                args.start_epoch = checkpoint['epoch']
-            best_prec1 = checkpoint['prec1']
+                args.start_epoch = checkpoint['epoch'] + 1
+            if 'prec1' in checkpoint:                           #remove after normalization
+                prec1 = checkpoint['prec1']
+            if 'best_epoch' in checkpoint:                      #remove after normalization
+                best_epoch = checkpoint['best_epoch']
+            if 'best_prec1' in  checkpoint:                     #remove after normalization
+                best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
-            print("=> loaded checkpoint '{}' (epoch {}, Prec@1 {:.3f})".format(
-                  args.resume, checkpoint['epoch'], best_prec1))
+            print("    (epoch {}, Prec@1 {:.3f})  (best_epoch {}, best_Prec@1 {:.3f}))".format(
+                  checkpoint['epoch'], prec1, best_epoch, best_prec1))
+            if args.start_epoch == 0:
+                #this means finetuning parameters from start, not resume
+                best_prec1 = 0
+                best_epoch = -1
+            elif prec1 > best_prec1:                            #remove after normalization
+                best_prec1 = prec1                              #remove after normalization
+                best_epoch = checkpoint['epoch'] - 1            #remove after normalization
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
@@ -331,10 +344,12 @@ def main():
         if is_best:
             best_epoch = epoch
         save_checkpoint({
-            'epoch': epoch + 1,
+            'epoch': epoch,
             'arch': args.arch,
             'state_dict': model.state_dict(),
             'prec1': prec1,
+            'best_epoch': best_epoch,
+            'best_prec1': best_prec1,
         }, is_best, args.snapshot_prefix)
     print("Best_Prec@1: {:.3f} (at {} epoch)".format(best_prec1, best_epoch))
 
